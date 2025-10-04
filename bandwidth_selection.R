@@ -7,23 +7,23 @@ library(shiny)
 library(broom)
 
 set.seed(3009)
+# Funziopna M
 m <- function(x) {
   sin((x / 3 + 0.1)^-1)
 }
-
+# grazie photomath
 m_double_prime <- function(x) {
   (2 * (100 * x^2 + 60 * x + 9) * cos(30 / (10 * x + 3))
    - 900 * (x / 3 + 0.1) * sin(30 / (10 * x + 3))) /
     (9 * (10 * x + 3)^2 * (x / 3 + 0.1)^3)
 }
-
+#genera campione
 generate_sample <- function(n, alpha, beta, sigma2 = 1) {
   X <- rbeta(n, alpha, beta)
   Y <- m(X) + rnorm(n, 0, sqrt(sigma2))
   data.frame(X = X, Y = Y)
 }
-
-
+# un polinomio per ogni blocco, occhio a alfa piccolo e beta grande
 fit_block_models <- function(data, N) {
   # Create blocks based on quantiles of X
   breaks <- quantile(data$X, probs = seq(0, 1, length.out = N + 1))
@@ -35,7 +35,7 @@ fit_block_models <- function(data, N) {
   for (j in 1:N) {
     block_obs <- data[data$block == levels(data$block)[j], ]
     if (nrow(block_obs) >= 5) {
-      # Need at least 5 observations for quartic polynomial
+      # Servono almeno 5 osservazioni per stimare il polinomio 4 p=5
       model <- lm(Y ~ poly(X, 4, raw = TRUE), data = block_obs)
       models[[j]] <- model
       block_data[[j]] <- block_obs
@@ -47,7 +47,7 @@ fit_block_models <- function(data, N) {
   list(models = models, block_data = block_data, breaks = breaks)
 }
 
-# Estimate theta_22 and sigma^2
+# stima theta_22 and sigma^2
 estimate_parameters <- function(data, block_results) {
   models <- block_results$models
   block_data <- block_results$block_data
@@ -62,8 +62,8 @@ estimate_parameters <- function(data, block_results) {
       block_obs <- block_data[[j]]
       n_block <- nrow(block_obs)
 
-      # Get second derivative estimates
-      # For polynomial: m(x) = b0 + b1*x + b2*x^2 + b3*x^3 + b4*x^4
+      # calcoliamo a mano le derivate, per semplificarci la vita
+      # m(x) = b0 + b1*x + b2*x^2 + b3*x^3 + b4*x^4
       # m' (x) = b1 + 2*b2*x + 3*b3*x^2 + 4*b4*x^3
       # m''(x) = 2*b2 + 6*b3*x + 12*b4*x^2
       coefs <- coef(models[[j]])
@@ -72,7 +72,6 @@ estimate_parameters <- function(data, block_results) {
         b3 <- coefs[4]
         b4 <- coefs[5]
 
-        # Calculate second derivative for each observation in the block
         m_double_prime_est <- 2 * b2 + 6 * b3 * block_obs$X +
           12 * b4 * block_obs$X^2
 
@@ -88,7 +87,7 @@ estimate_parameters <- function(data, block_results) {
     }
   }
 
-  # Support of X (assuming [0,1] for Beta distribution)
+  # supporto beta [0,1]
   support_length <- 1
 
   list(
@@ -99,7 +98,7 @@ estimate_parameters <- function(data, block_results) {
   )
 }
 
-# Calculate optimal bandwidth
+# optimal bandwidth
 calculate_h_amise <- function(n, theta_22, sigma2, support_length) {
   if (is.na(theta_22) || theta_22 <= 0) {
     return(NA)
@@ -107,7 +106,7 @@ calculate_h_amise <- function(n, theta_22, sigma2, support_length) {
   n^(-1 / 5) * (35 * sigma2 * support_length / theta_22)^(1 / 5)
 }
 
-# Calculate Mallow's Cp to find optimal N
+# Mallow's Cp to find optimal N
 find_optimal_N <- function(data, N_max) {
   cp_values <- numeric(N_max)
   rss_values <- numeric(N_max)
@@ -119,7 +118,7 @@ find_optimal_N <- function(data, N_max) {
     if (!is.na(param_estimates$sigma2)) {
       rss_values[N] <- param_estimates$sigma2 * (nrow(data) - 5 * N)
 
-      # Calculate Cp
+      # Cp
       if (N == N_max) {
         rss_Nmax <- rss_values[N_max]
         for (k in 1:N_max) {
@@ -134,7 +133,7 @@ find_optimal_N <- function(data, N_max) {
   list(optimal_N = optimal_N, cp_values = cp_values, rss_values = rss_values)
 }
 ##################################################################################################
-# Study effect of sample size
+# Variamo la dimensione del campione, un solo campione
 study_sample_size <- function() {
   n_values <- c(100, 200, 500, 1000, 2000, 5000)
   alpha <- 2
@@ -148,7 +147,7 @@ study_sample_size <- function() {
 
   for (n in n_values) {
     cat("Processing n =", n, "\n")
-
+    #set.seed(3009+n)
     data <- generate_sample(n, alpha, beta, sigma2)
     block_results <- fit_block_models(data, N_fixed)
     param_estimates <- estimate_parameters(data, block_results)
@@ -176,6 +175,7 @@ study_sample_size <- function() {
     theme_minimal()
 
   print(p1)
+  ggsave("sample_size.png", p1, width = 12, height = 8, dpi = 300)
 
   return(results)
 }
@@ -183,7 +183,7 @@ study_sample_size <- function() {
 sample_size_results <- study_sample_size()
 
 ##################################################################################################
-# Study effect of block size N
+# Effetto della dim dei blocchi
 study_block_size <- function() {
   n <- 1000
   alpha <- 2
@@ -213,7 +213,7 @@ study_block_size <- function() {
     ))
   }
   
-  # Find optimal N using Cp
+  # N ottimale secondo Cp
   cp_result <- find_optimal_N(data, N_max)
   optimal_N <- cp_result$optimal_N
   
@@ -229,6 +229,7 @@ study_block_size <- function() {
     theme_minimal()
   
   print(p1)
+  ggsave("block_size_1.png", p1, width = 12, height = 8, dpi = 300)
   
   # Plot Cp values
   cp_data <- data.frame(N = 1:N_max, Cp = cp_result$cp_values[1:N_max])
@@ -241,6 +242,7 @@ study_block_size <- function() {
     theme_minimal()
   
   print(p2)
+  ggsave("block_size_2.png", p2, width = 12, height = 8, dpi = 300)
   
   return(list(results = results, optimal_N = optimal_N, cp_data = cp_data))
 }
@@ -248,17 +250,17 @@ study_block_size <- function() {
 block_size_results <- study_block_size()
 
 ##################################################################################################
-# Study effect of Beta distribution parameters
+# variamo i parametri alfa e beta, occhio nel report
 study_beta_params <- function() {
   n <- 1000
   sigma2 <- 1
   N_fixed <- 5
   
   param_combinations <- expand.grid(
-    alpha = c(0.5, 1, 2, 5),
-    beta = c(0.5, 1, 2, 5)
+    alpha = c(0.5, 1, 2, 3, 4, 5), 
+    beta = c(0.5, 1, 2, 3, 4, 5)
   )
-  
+  # abbiamo tanti valori sulla dx per alfa piccolo e beta grande, quindi i coefficienti del polinomio sulla sx sono molto piccoli
   results <- data.frame(alpha = numeric(), beta = numeric(), h_amise = numeric(), 
                        theta_22 = numeric(), sigma2_est = numeric())
   
@@ -294,6 +296,7 @@ study_beta_params <- function() {
     theme_minimal()
   
   print(p1)
+  ggsave("beta_params.png", p1, width = 12, height = 8, dpi = 300)
   
   return(results)
 }
